@@ -95,6 +95,15 @@ export function buildSearchTrendsChart(series: { date: string; value: number }[]
   })
 }
 
+/** Keeps every series (unlike the single-series helpers below) for grouped/multi-line PDF charts. */
+export function buildPdfChartSeries(chart: ScoutChartOutput): { label: string; color?: string | null; points: { x: string; y: number }[] }[] {
+  return chart.series.map((series) => ({
+    label: series.label,
+    color: series.color ?? null,
+    points: series.points.map((point) => ({ x: point.x, y: point.y })),
+  }))
+}
+
 export function buildPdfSeriesFromScoutChart(chart: ScoutChartOutput): { date: string; value: number }[] {
   const series = chart.series[0]
   if (!series) return []

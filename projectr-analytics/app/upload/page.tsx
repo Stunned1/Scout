@@ -77,7 +77,7 @@ export default function ClientUploadPage() {
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto max-w-lg space-y-6 px-5 py-8 pb-16 sm:px-6">
+          <div className="mx-auto max-w-3xl space-y-6 px-5 py-8 pb-16 sm:px-6">
             <div>
               <h2 className="text-lg font-semibold tracking-tight text-foreground">Upload a file</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

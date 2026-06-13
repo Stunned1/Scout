@@ -1,7 +1,14 @@
 import { isScoutChartOutput, normalizeScoutChartOutput } from '@/lib/scout-chart-output'
 import type { SavedOutputRecord } from '@/lib/saved-charts-store'
 
-export type SavedOutputPdfRecord = SavedOutputRecord
+/** Cover-page fallback when no notes are provided; the preview editor targets this text for click-to-edit. */
+export const COVER_NOTES_PLACEHOLDER =
+  'No custom notes were added for this export. The pages that follow keep the saved output title, source prompt, and context metadata so the reader can understand what each item is showing.'
+
+export type SavedOutputPdfRecord = SavedOutputRecord & {
+  displayTitle?: string | null
+  note?: string | null
+}
 
 export interface SavedChartsPdfPayload {
   title: string
@@ -45,11 +52,15 @@ function normalizeSavedOutputPdfRecord(value: unknown): SavedOutputPdfRecord | n
 
   const marketLabel = typeof value.marketLabel === 'string' ? clampString(value.marketLabel, 160) : null
   const prompt = typeof value.prompt === 'string' ? clampString(value.prompt, 240) : null
+  const displayTitle = typeof value.displayTitle === 'string' ? clampString(value.displayTitle, 160) || null : null
+  const note = typeof value.note === 'string' ? clampString(value.note, 600) || null : null
+  const overrides = { displayTitle, note }
 
   if (inferredKind === 'chart') {
     const payload = isRecord(value.payload) ? value.payload : isRecord(value.chart) ? value.chart : null
     if (!prompt || !payload || !isScoutChartOutput(payload)) return null
     return {
+      ...overrides,
       id: value.id,
       kind: 'chart',
       prompt,
@@ -75,6 +86,7 @@ function normalizeSavedOutputPdfRecord(value: unknown): SavedOutputPdfRecord | n
     })
     if (stats.length !== value.payload.stats.length) return null
     return {
+      ...overrides,
       id: value.id,
       kind: 'stat_card',
       prompt,
@@ -113,6 +125,7 @@ function normalizeSavedOutputPdfRecord(value: unknown): SavedOutputPdfRecord | n
     })
     if (stats.length !== value.payload.stats.length) return null
     return {
+      ...overrides,
       id: value.id,
       kind: 'permit_detail',
       prompt,
@@ -165,6 +178,7 @@ function normalizeSavedOutputPdfRecord(value: unknown): SavedOutputPdfRecord | n
     })
     if (countsByCategory.length !== value.payload.countsByCategory.length || topPlaces.length !== value.payload.topPlaces.length) return null
     return {
+      ...overrides,
       id: value.id,
       kind: 'places_context',
       prompt,
@@ -193,6 +207,7 @@ function normalizeSavedOutputPdfRecord(value: unknown): SavedOutputPdfRecord | n
       return null
     }
     return {
+      ...overrides,
       id: value.id,
       kind: 'uploaded_pin',
       prompt,

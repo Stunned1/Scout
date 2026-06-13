@@ -1,9 +1,9 @@
 import React from 'react'
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
-import { BarChartPdf, SparklinePdf } from '@/lib/report/pdf-charts'
-import { buildPdfBarRowsFromScoutChart, buildPdfSeriesFromScoutChart } from '@/lib/report/scout-chart-pdf-adapter'
-import type { SavedChartsPdfPayload, SavedOutputPdfRecord } from '@/lib/report/saved-charts-export'
+import { GroupedBarChartPdf, MultiLineChartPdf } from '@/lib/report/pdf-charts'
+import { buildPdfChartSeries } from '@/lib/report/scout-chart-pdf-adapter'
+import { COVER_NOTES_PLACEHOLDER, type SavedChartsPdfPayload, type SavedOutputPdfRecord } from '@/lib/report/saved-charts-export'
 
 const accent = '#D76B3D'
 const ink = '#18181B'
@@ -169,29 +169,17 @@ function formatTimestamp(value: string): string {
 }
 
 function renderChart(record: Extract<SavedOutputPdfRecord, { kind: 'chart' }>) {
+  const series = buildPdfChartSeries(record.payload)
   if (record.payload.kind === 'line') {
-    return (
-      <SparklinePdf
-        data={buildPdfSeriesFromScoutChart(record.payload)}
-        width={470}
-        height={180}
-        color={record.payload.series[0]?.color ?? accent}
-      />
-    )
+    return <MultiLineChartPdf series={series} width={470} height={180} />
   }
 
-  return (
-    <BarChartPdf
-      bars={buildPdfBarRowsFromScoutChart(record.payload)}
-      width={470}
-      height={200}
-      color={record.payload.series[0]?.color ?? accent}
-      caption={record.payload.yAxis.label}
-    />
-  )
+  return <GroupedBarChartPdf series={series} width={470} height={200} caption={record.payload.yAxis.label} />
 }
 
 function outputTitle(record: SavedOutputPdfRecord): string {
+  const override = record.displayTitle?.trim()
+  if (override) return override
   if (record.kind === 'chart') return record.payload.title
   if (record.kind === 'stat_card') return record.payload.title
   if (record.kind === 'permit_detail') return record.payload.title
@@ -301,9 +289,7 @@ export function SavedChartsPdfDocument({
 
         <View style={styles.noteBox}>
           <Text style={styles.noteTitle}>Notes for readers</Text>
-          <Text style={styles.noteText}>
-            {notes || 'No custom notes were added for this export. The pages that follow keep the saved output title, source prompt, and context metadata so the reader can understand what each item is showing.'}
-          </Text>
+          <Text style={styles.noteText}>{notes || COVER_NOTES_PLACEHOLDER}</Text>
         </View>
 
         {payload.outputs.map((record, index) => (
@@ -348,6 +334,13 @@ export function SavedChartsPdfDocument({
                 {'prompt' in group.record && group.record.prompt ? `Prompt: ${group.record.prompt}` : 'Saved sidebar artifact'}
                 {group.record.marketLabel ? `  |  Market: ${group.record.marketLabel}` : ''}
               </Text>
+
+              {group.record.note?.trim() ? (
+                <View style={styles.noteBox}>
+                  <Text style={styles.noteTitle}>Analyst note</Text>
+                  <Text style={styles.noteText}>{group.record.note.trim()}</Text>
+                </View>
+              ) : null}
 
               {group.record.kind === 'chart' ? (
                 <View style={styles.card}>{renderChart(group.record)}</View>
@@ -415,11 +408,20 @@ export function SavedChartsPdfDocument({
           ) : (
             <>
               <Text style={styles.kicker}>Site bundle</Text>
-              <Text style={styles.sectionTitle}>{group.siteLabel}</Text>
+              <Text style={styles.sectionTitle}>{group.uploadedPin.displayTitle?.trim() || group.siteLabel}</Text>
               <Text style={styles.subhead}>
                 Saved uploaded-site bundle
                 {group.marketLabel ? `  |  Market: ${group.marketLabel}` : ''}
               </Text>
+
+              {group.uploadedPin.note?.trim() || group.placesContext?.note?.trim() ? (
+                <View style={styles.noteBox}>
+                  <Text style={styles.noteTitle}>Analyst note</Text>
+                  <Text style={styles.noteText}>
+                    {[group.uploadedPin.note?.trim(), group.placesContext?.note?.trim()].filter(Boolean).join('\n')}
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={styles.card}>
                 <Text style={styles.noteTitle}>Site snapshot</Text>

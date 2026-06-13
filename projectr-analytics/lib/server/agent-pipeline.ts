@@ -39,6 +39,11 @@ import type { AnalyticalComparisonRequest, AnalyticalComparisonResult } from '@/
 import type { MasterDataRow } from '@/lib/data/types'
 import { normalizeUsStateToAbbr, splitTrailingUsState } from '@/lib/us-state-abbr'
 import { buildCoreRetailComparison, type CoreRetailComparisonResult } from '@/lib/overture-core-retail-comparison'
+import {
+  buildConsumerMarketComparison,
+  hasConsumerMarketComparisonIntent,
+  type ConsumerMarketDependencies,
+} from '@/lib/server/consumer-market-comparison'
 import type {
   AgentInternalProvenanceQuery,
   AgentPublicMacroEvidenceResult,
@@ -562,6 +567,7 @@ type HistoryComparisonDependencies = {
   getDriveTimeGrounding?: (query: AgentDriveTimeQuery) => Promise<AgentDriveTimeEvidenceResult>
   getTexasRawPermits?: (scope: { city: string; state?: string | null }) => Promise<TexasRawPermitResult | null>
   validateGroundingPayload?: GroundingValidationFn
+  consumerMarket?: ConsumerMarketDependencies
 }
 
 const HISTORY_METRIC_CONFIG: Record<
@@ -1195,7 +1201,7 @@ function buildCoreRetailComparisonChart(comparison: CoreRetailComparisonResult):
         label: 'Overture POIs',
         sourceType: 'public_dataset',
         scope: `${comparison.cityA.label} and ${comparison.cityB.label} core anchors`,
-        note: `Current snapshot within ${comparison.radiusMeters}m fixed-radius core anchors.`,
+        note: `Current snapshot within ${comparison.radiusMeters}m fixed-radius core anchors. https://docs.overturemaps.org/guides/places/`,
       },
     ],
   })
@@ -1224,7 +1230,7 @@ function buildCoreRetailComparisonTrace(comparison: CoreRetailComparisonResult):
         label: 'Overture POIs',
         sourceType: 'public_dataset',
         scope: `${comparison.cityA.label} and ${comparison.cityB.label} core anchors`,
-        note: `Current snapshot within ${comparison.radiusMeters}m fixed-radius core anchors.`,
+        note: `Current snapshot within ${comparison.radiusMeters}m fixed-radius core anchors. https://docs.overturemaps.org/guides/places/`,
       },
     ],
   }
@@ -1366,6 +1372,52 @@ async function maybeBuildCoreRetailComparisonResponse(
     trace,
     chart,
     companionOutputs,
+  }
+}
+
+function buildConsumerMarketFailurePayload(error: unknown): AgentPipelineResult {
+  const reason = error instanceof Error ? error.message : 'One of the evidence fetches failed.'
+  return {
+    message: `I recognized a consumer-market comparison but could not ground it: ${reason}`,
+    action: { type: 'none' as const },
+    trace: {
+      summary: 'Consumer-market comparison could not be grounded',
+      taskType: 'compare_segments',
+      methodology:
+        'Scout planned an agentic consumer-market comparison, but one of the live evidence fetches (Census ACS, geocoding, or Overture POIs) did not return usable values, so no charts were generated.',
+      keyFindings: ['No comparison charts were generated.'],
+      evidence: [reason],
+      caveats: ['The ACS 1-year place series only covers cities with 65k+ residents.'],
+      nextQuestions: ['Try two larger US cities, like Austin vs Houston.'],
+    },
+    chart: null,
+  }
+}
+
+/**
+ * Agentic consumer-market path: Gemini plans the comparison, live tools (Census ACS,
+ * geocoding, Overture POIs) fetch the evidence, and Gemini synthesizes the takeaways.
+ * Generalizes across business types and ACS-covered US cities.
+ */
+async function maybeBuildConsumerMarketComparisonResponse(
+  userMessage: string,
+  dependencies: HistoryComparisonDependencies = {}
+): Promise<AgentPipelineResult | null> {
+  if (!hasConsumerMarketComparisonIntent(userMessage)) return null
+  if (!process.env.GEMINI_API_KEY && !dependencies.consumerMarket?.generateJson) return null
+
+  try {
+    const outcome = await buildConsumerMarketComparison(userMessage, dependencies.consumerMarket)
+    if (!outcome) return null
+    return {
+      message: outcome.message,
+      action: { type: 'none' as const },
+      trace: outcome.trace,
+      chart: outcome.chart,
+      companionOutputs: outcome.companionOutputs,
+    }
+  } catch (error) {
+    return buildConsumerMarketFailurePayload(error)
   }
 }
 
@@ -2219,6 +2271,9 @@ async function maybeBuildHistoryChartedResponse(
   context: MapContext | null,
   dependencies: HistoryComparisonDependencies = {}
 ): Promise<AgentPipelineResult | null> {
+  const consumerMarket = await maybeBuildConsumerMarketComparisonResponse(userMessage, dependencies)
+  if (consumerMarket) return consumerMarket
+
   const coreRetail = await maybeBuildCoreRetailComparisonResponse(userMessage, dependencies)
   if (coreRetail) return coreRetail
 
@@ -2545,6 +2600,13 @@ export async function buildRetailComparisonResponseForTest(
   dependencies: HistoryComparisonDependencies = {}
 ) {
   return maybeBuildCoreRetailComparisonResponse(userMessage, dependencies)
+}
+
+export function buildConsumerMarketResponseForTest(
+  userMessage: string,
+  dependencies: HistoryComparisonDependencies = {}
+) {
+  return maybeBuildConsumerMarketComparisonResponse(userMessage, dependencies)
 }
 
 function buildDefaultMapControlMessage(action: AgentAction): string {

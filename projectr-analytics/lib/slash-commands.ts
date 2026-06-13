@@ -32,7 +32,7 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   },
   {
     command: 'export',
-    summary: '`/export`: open the saved-output PDF export dialog',
+    summary: '`/export`: open the saved-output PDF editor with live preview',
   },
   {
     command: 'layers',
@@ -123,9 +123,9 @@ export type ParsedExportSlash =
 
 export function exportSlashUsageLines(): string {
   return [
-    'Usage: `/export`: opens the saved-output PDF export dialog.',
-    '• The dialog lists charts saved from the terminal in this browser session.',
-    '• Pick the charts you want, add notes, then export a PDF.',
+    'Usage: `/export`: opens the saved-output PDF editor with a live preview.',
+    '• The editor lists outputs saved from the terminal in this browser session.',
+    '• Reorder sections, rename them, and add notes — the PDF preview updates live before you export.',
   ].join('\n')
 }
 

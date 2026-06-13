@@ -16,6 +16,32 @@ import {
   YAxis,
 } from 'recharts'
 
+const URL_PATTERN = /(https?:\/\/[^\s)]+)/g
+
+/** Renders plain text with any http(s) URLs as clickable links (used for citation notes). */
+function LinkifiedText({ text }: { text: string }) {
+  const segments = text.split(URL_PATTERN)
+  return (
+    <>
+      {segments.map((segment, index) =>
+        /^https?:\/\//.test(segment) ? (
+          <a
+            key={index}
+            href={segment}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="break-all text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+          >
+            {segment.replace(/^https?:\/\/(www\.)?/, '')}
+          </a>
+        ) : (
+          segment
+        )
+      )}
+    </>
+  )
+}
+
 function formatValue(value: number, format: ScoutChartOutput['yAxis']['valueFormat']) {
   if (format === 'currency') return `$${Math.round(value).toLocaleString()}`
   if (format === 'percent') return `${value.toFixed(1)}%`
@@ -148,7 +174,7 @@ export function ScoutChartCard({
               <p key={citation.id} className="text-[10px] leading-relaxed text-zinc-400">
                 <span className="font-medium text-zinc-200">{citation.label}</span>
                 {citation.periodLabel ? ` · ${citation.periodLabel}` : ''}
-                {citation.note ? ` · ${citation.note}` : ''}
+                {citation.note ? <> · <LinkifiedText text={citation.note} /></> : null}
                 {citation.placeholder ? ' · placeholder' : ''}
               </p>
             ))}
